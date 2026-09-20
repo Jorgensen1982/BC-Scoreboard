@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>B&C Bar Live Scoreboard</title>
+
+<style>
+body {
+    margin: 0;
+    background: #111;
+    color: white;
+    font-family: Arial, sans-serif;
+    text-align: center;
+}
+
+h1 {
+    margin: 15px;
+}
+
+#scoreboard {
+    display: block;
+    width: 100%;
+    height: auto;
+    object-fit: contain;
+}
+
+#status {
+    padding: 10px;
+    color: #aaa;
+}
+</style>
+</head>
+
+<body>
+
+<h1>B&C BAR - LIVE SCOREBOARD</h1>
+
+<img id="scoreboard" alt="Live Scoreboard">
+
+<div id="status">Loading scoreboard...</div>
+
+<script>
+const image = document.getElementById("scoreboard");
+const status = document.getElementById("status");
+
+function updateScoreboard() {
+
+    const newImage = new Image();
+
+    newImage.onload = function() {
+        image.src = newImage.src;
+        status.textContent = "Scoreboard connected";
+    };
+
+    newImage.onerror = function() {
+        status.textContent = "Waiting for scoreboard...";
+    };
+
+    newImage.src = "scoreboard.png?t=" + Date.now();
+}
+
+updateScoreboard();
+
+setInterval(updateScoreboard, 30000);
+</script>
+
+</body>
+</html>
