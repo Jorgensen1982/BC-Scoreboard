@@ -13,67 +13,51 @@ content="width=device-width, initial-scale=1.0">
 
 <style>
 
-/* =====================================
-   B&C BAR - LIVE SCOREBOARD
-   ===================================== */
-
 * {
     box-sizing: border-box;
 }
 
-html,
-body {
-
+html, body {
     margin: 0;
     padding: 0;
-
     width: 100%;
     height: 100%;
-
     background: #000;
-
     overflow: hidden;
-
     font-family: Arial, sans-serif;
-
 }
-
-/* FULLSCREEN IMAGE */
 
 #scoreboard {
-
     display: none;
-
     width: 100vw;
-
     height: 100vh;
     height: 100dvh;
-
     object-fit: contain;
-
     object-position: center;
-
     background: #000;
-
 }
 
-/* STATUS MESSAGE */
-
 #status {
-
-    position: absolute;
-
+    position: fixed;
     top: 50%;
     left: 50%;
-
     transform: translate(-50%, -50%);
-
     color: #ffcc00;
-
     text-align: center;
+    font-size: 18px;
+    padding: 20px;
+}
 
-    font-size: 20px;
-
+#connection {
+    position: fixed;
+    bottom: 8px;
+    right: 8px;
+    background: rgba(0,0,0,0.8);
+    color: #aaa;
+    padding: 5px 9px;
+    border-radius: 5px;
+    font-size: 11px;
+    z-index: 10;
 }
 
 </style>
@@ -91,11 +75,11 @@ Connecting to B&C Bar Live Scoreboard...
     alt="B&C Bar Live Scoreboard"
 >
 
-<script type="module">
+<div id="connection">
+Connecting...
+</div>
 
-/* =====================================
-   FIREBASE IMPORTS
-   ===================================== */
+<script type="module">
 
 import { initializeApp } from
 "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
@@ -103,14 +87,16 @@ import { initializeApp } from
 import {
     getDatabase,
     ref,
-    onValue
+    onValue,
+    get,
+    goOnline
 } from
 "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
 
-/* =====================================
+/* ======================================
    FIREBASE CONFIGURATION
-   ===================================== */
+   ====================================== */
 
 const firebaseConfig = {
 
@@ -138,135 +124,237 @@ const firebaseConfig = {
 };
 
 
-/* =====================================
-   INITIALIZE FIREBASE
-   ===================================== */
+/* ======================================
+   INITIALIZE
+   ====================================== */
 
 const app = initializeApp(firebaseConfig);
 
-const database = getDatabase(app);
+const db = getDatabase(app);
+
+const scoreboardRef = ref(db, "scoreboard/current");
+
+const image = document.getElementById("scoreboard");
+
+const status = document.getElementById("status");
+
+const connection = document.getElementById("connection");
+
+let currentVersion = null;
+
+let requestNumber = 0;
 
 
-/* =====================================
-   HTML ELEMENTS
-   ===================================== */
+/* ======================================
+   DISPLAY IMAGE
+   ====================================== */
 
-const scoreboard =
-document.getElementById("scoreboard");
+function displayScoreboard(data) {
 
-const status =
-document.getElementById("status");
+    if (!data || !data.image) {
+
+        if (!image.src) {
+            status.textContent = "Waiting for scoreboard...";
+        }
+
+        return;
+    }
+
+    const version = data.updatedAt || 0;
+
+    if (version === currentVersion) {
+        return;
+    }
+
+    const thisRequest = ++requestNumber;
+
+    const newImage = new Image();
+
+    newImage.onload = function() {
+
+        if (thisRequest !== requestNumber) {
+            return;
+        }
+
+        image.src = newImage.src;
+
+        image.style.display = "block";
+
+        status.style.display = "none";
+
+        currentVersion = version;
+
+        const time = version
+            ? new Date(version).toLocaleTimeString()
+            : new Date().toLocaleTimeString();
+
+        connection.textContent =
+            "Updated: " + time;
+
+        connection.style.color = "#70ff70";
+
+        console.log(
+            "Scoreboard received:",
+            time
+        );
+
+    };
+
+    newImage.onerror = function() {
+
+        connection.textContent =
+            "Image loading error";
+
+        connection.style.color = "#ff5555";
+
+    };
+
+    newImage.src = data.image;
+
+}
 
 
-/* =====================================
-   LIVE DATABASE REFERENCE
-   ===================================== */
-
-const scoreboardRef =
-ref(database, "scoreboard/current");
-
-
-/* =====================================
-   RECEIVE LIVE UPDATES
-   ===================================== */
-
-let latestImageVersion = 0;
+/* ======================================
+   FIREBASE LIVE LISTENER
+   ====================================== */
 
 onValue(
 
     scoreboardRef,
 
-    (snapshot) => {
+    snapshot => {
 
-        if (!snapshot.exists()) {
+        if (snapshot.exists()) {
 
-            if (!scoreboard.src) {
-                status.textContent =
-                "Waiting for scoreboard...";
-            }
-
-            return;
+            displayScoreboard(snapshot.val());
 
         }
+        else {
 
-        const data = snapshot.val();
-
-        if (!data.image) {
-
-            if (!scoreboard.src) {
+            if (!image.src) {
                 status.textContent =
-                "Waiting for image...";
+                    "Waiting for first scoreboard...";
             }
 
-            return;
-
         }
-
-        // Avoid replacing the image if unchanged.
-
-        if (
-            data.updatedAt &&
-            data.updatedAt === latestImageVersion
-        ) {
-
-            return;
-
-        }
-
-        const newImage = new Image();
-
-        newImage.onload = function() {
-
-            scoreboard.src = newImage.src;
-
-            scoreboard.style.display = "block";
-
-            status.style.display = "none";
-
-            latestImageVersion =
-                data.updatedAt || 0;
-
-            console.log(
-                "Scoreboard updated:",
-                new Date().toLocaleTimeString()
-            );
-
-        };
-
-        newImage.onerror = function() {
-
-            console.error(
-                "Could not display scoreboard image."
-            );
-
-            if (!scoreboard.src) {
-                status.textContent =
-                "Waiting for valid scoreboard image...";
-            }
-
-        };
-
-        newImage.src = data.image;
 
     },
 
-    (error) => {
+    error => {
 
-        console.error(
-            "Firebase connection error:",
-            error
-        );
+        console.error(error);
 
-        if (!scoreboard.src) {
+        connection.textContent =
+            "Connection error";
 
-            status.textContent =
-            "Connection problem. Retrying...";
-
-        }
+        connection.style.color = "#ff5555";
 
     }
 
 );
+
+
+/* ======================================
+   REFRESH WHEN PHONE BECOMES ACTIVE
+   ====================================== */
+
+async function refreshScoreboard() {
+
+    try {
+
+        if (!navigator.onLine) {
+
+            connection.textContent = "Offline";
+
+            connection.style.color = "#ff5555";
+
+            return;
+
+        }
+
+        goOnline(db);
+
+        // Fetch the current database value again.
+        // Web SDK get() may use local cache if the
+        // server cannot be reached.
+
+        const snapshot = await get(scoreboardRef);
+
+        if (snapshot.exists()) {
+
+            displayScoreboard(snapshot.val());
+
+        }
+
+    }
+    catch (error) {
+
+        console.error(
+            "Refresh failed:",
+            error
+        );
+
+        connection.textContent =
+            "Reconnecting...";
+
+        connection.style.color = "#ffcc00";
+
+    }
+
+}
+
+
+/* ======================================
+   PHONE / BROWSER EVENTS
+   ====================================== */
+
+document.addEventListener(
+    "visibilitychange",
+    () => {
+
+        if (!document.hidden) {
+
+            refreshScoreboard();
+
+        }
+
+    }
+);
+
+
+window.addEventListener(
+    "pageshow",
+    () => {
+
+        refreshScoreboard();
+
+    }
+);
+
+
+window.addEventListener(
+    "online",
+    () => {
+
+        refreshScoreboard();
+
+    }
+);
+
+
+/* ======================================
+   FALLBACK REFRESH
+   ====================================== */
+
+setInterval(() => {
+
+    if (!document.hidden) {
+
+        refreshScoreboard();
+
+    }
+
+}, 15000);
 
 </script>
 
