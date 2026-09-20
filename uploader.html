@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+<meta charset="UTF-8">
+
+<meta name="viewport"
+content="width=device-width, initial-scale=1.0">
+
+<title>B&C Bar - Scoreboard Uploader</title>
+
+<style>
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    background: #101010;
+    color: white;
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 30px;
+}
+
+.container {
+    max-width: 800px;
+    margin: auto;
+}
+
+h1 {
+    color: #ffcc00;
+}
+
+button {
+    background: #ffcc00;
+    color: black;
+    border: none;
+    border-radius: 8px;
+    padding: 14px 20px;
+    margin: 6px;
+    font-size: 16px;
+    cursor: pointer;
+}
+
+button:disabled {
+    background: #555;
+    color: #aaa;
+    cursor: not-allowed;
+}
+
+.panel {
+    background: #222;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+#preview {
+    width: 100%;
+    height: auto;
+    display: none;
+}
+
+#status {
+    color: #ffcc00;
+    white-space: pre-wrap;
+}
+
+#uid {
+    overflow-wrap: anywhere;
+    color: #70ff70;
+}
+
+small {
+    color: #aaa;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="container">
+
+<h1>B&C BAR</h1>
+
+<h2>Live Scoreboard Uploader</h2>
+
+<div class="panel">
+
+<h3>1. Google Login</h3>
+
+<button id="login">
+Sign in with Google
+</button>
+
+<button id="logout" disabled>
+Sign out
+</button>
+
+<p id="user">Not signed in</p>
+
+<p>
+Firebase UID:
+<br>
+<strong id="uid">-</strong>
+</p>
+
+<button id="copyuid" disabled>
+Copy UID
+</button>
+
+</div>
+
+<div class="panel">
+
+<h3>2. Select Scoreboard Folder</h3>
+
+<p>
+Select the folder:
+<br>
+C:\BCScoreboard
+</p>
+
+<button id="choose">
+Choose Folder
+</button>
+
+<p id="folderstatus">
+No folder selected
+</p>
+
+</div>
+
+<div class="panel">
+
+<h3>3. Screenshot Preview</h3>
+
+<img id="preview" alt="Scoreboard preview">
+
+<p>
+<small>
+Only scoreboard.jpg will be uploaded.
+Check that the image contains no private
+information before starting automatic uploads.
+</small>
+</p>
+
+</div>
+
+<div class="panel">
+
+<h3>4. Live Upload</h3>
+
+<button id="start" disabled>
+START LIVE UPLOAD
+</button>
+
+<button id="stop" disabled>
+STOP UPLOAD
+</button>
+
+<p id="status">
+Waiting for setup...
+</p>
+
+</div>
+
+</div>
+
+<script type="module">
+
+import { initializeApp } from
+"https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+
+import {
+    getAuth,
+    GoogleAuthProvider,
+    signInWithPopup,
+    signOut,
+    onAuthStateChanged
+} from
+"https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+import {
+    getDatabase,
+    ref,
+    set,
+    serverTimestamp
+} from
+"https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+
+/* =====================================
+   FIREBASE CONFIG
+   ===================================== */
+
+const firebaseConfig = {
+
+    apiKey:
+    "AIzaSyDcy1Zz0uAqhJTy1a0NeqgpQM9wvhoHWVw",
+
+    authDomain:
+    "bc-bar-scoreboard.firebaseapp.com",
+
+    databaseURL:
+    "https://bc-bar-scoreboard-default-rtdb.asia-southeast1.firebasedatabase.app",
+
+    projectId:
+    "bc-bar-scoreboard",
+
+    storageBucket:
+    "bc-bar-scoreboard.firebasestorage.app",
+
+    messagingSenderId:
+    "900224710254",
+
+    appId:
+    "1:900224710254:web:732b75ff534ba0e6ed187f"
+
+};
+
+
+/* =====================================
+   INITIALIZE FIREBASE
+   ===================================== */
+
+const app = initializeApp(firebaseConfig);
+
+const auth = getAuth(app);
+
+const db = getDatabase(app);
+
+const provider = new GoogleAuthProvider();
+
+
+/* =====================================
+   ELEMENTS
+   ===================================== */
+
+const loginButton =
+document.getElementById("login");
+
+const logoutButton =
+document.getElementById("logout");
+
+const copyUidButton =
+document.getElementById("copyuid");
+
+const chooseButton =
+document.getElementById("choose");
+
+const startButton =
+document.getElementById("start");
+
+const stopButton =
+document.getElementById("stop");
+
+const status =
+document.getElementById("status");
+
+const preview =
+document.getElementById("preview");
+
+
+/* =====================================
+   VARIABLES
+   ===================================== */
+
+let folderHandle = null;
+
+let fileHandle = null;
+
+let lastUploaded = "";
+
+let running = false;
+
+let busy = false;
+
+let timer = null;
+
+let previewURL = null;
+
+
+/* =====================================
+   STATUS
+   ===================================== */
+
+function showStatus(message) {
+
+    status.textContent = message;
+
+    console.log(message);
+
+}
+
+function updateButtons() {
+
+    const ready =
+        auth.currentUser !== null &&
+        fileHandle !== null;
+
+    startButton.disabled =
+        !ready || running;
+
+    stopButton.disabled =
+        !running;
+
+    logoutButton.disabled =
+        auth.currentUser === null;
+
+    copyUidButton.disabled =
+        auth.currentUser === null;
+
+}
+
+
+/* =====================================
+   GOOGLE LOGIN
+   ===================================== */
+
+loginButton.onclick = async () => {
+
+    try {
+
+        await signInWithPopup(
+            auth,
+            provider
+        );
+
+    }
+    catch (error) {
+
+        showStatus(
+            "Login error: " + error.message
+        );
+
+    }
+
+};
+
+
+logoutButton.onclick = async () => {
+
+    stopUpload();
+
+    await signOut(auth);
+
+};
+
+
+onAuthStateChanged(auth, user => {
+
+    if (user) {
+
+        document.getElementById("user")
+        .textContent = user.email;
+
+        document.getElementById("uid")
+        .textContent = user.uid;
+
+        loginButton.disabled = true;
+
+        showStatus("Google login successful.");
+
+    }
+    else {
+
+        document.getElementById("user")
+        .textContent = "Not signed in";
+
+        document.getElementById("uid")
+        .textContent = "-";
+
+        loginButton.disabled = false;
+
+        stopUpload();
+
+    }
+
+    updateButtons();
+
+});
+
+
+/* =====================================
+   COPY UID
+   ===================================== */
+
+copyUidButton.onclick = async () => {
+
+    if (!auth.currentUser) return;
+
+    try {
+
+        await navigator.clipboard.writeText(
+            auth.currentUser.uid
+        );
+
+        showStatus("Firebase UID copied.");
+
+    }
+    catch (error) {
+
+        showStatus(
+            "Copy failed: " + error.message
+        );
+
+    }
+
+};
+
+
+/* =====================================
+   SELECT FOLDER
+   ===================================== */
+
+chooseButton.onclick = async () => {
+
+    try {
+
+        if (!window.showDirectoryPicker) {
+
+            throw new Error(
+                "Use Chrome or Edge over HTTPS."
+            );
+
+        }
+
+        folderHandle =
+        await window.showDirectoryPicker({
+            mode: "read"
+        });
+
+        fileHandle =
+        await folderHandle.getFileHandle(
+            "scoreboard.jpg"
+        );
+
+        document.getElementById(
+            "folderstatus"
+        ).textContent =
+        "Selected: " + folderHandle.name;
+
+        await updatePreview();
+
+        updateButtons();
+
+    }
+    catch (error) {
+
+        showStatus(
+            "Folder error: " + error.message
+        );
+
+    }
+
+};
+
+
+/* =====================================
+   UPDATE PREVIEW
+   ===================================== */
+
+async function updatePreview() {
+
+    if (!fileHandle) return;
+
+    const file =
+    await fileHandle.getFile();
+
+    if (previewURL) {
+
+        URL.revokeObjectURL(previewURL);
+
+    }
+
+    previewURL =
+    URL.createObjectURL(file);
+
+    preview.src = previewURL;
+
+    preview.style.display = "block";
+
+}
+
+
+/* =====================================
+   READ FILE
+   ===================================== */
+
+function readFileAsDataURL(file) {
+
+    return new Promise(
+        (resolve, reject) => {
+
+            const reader =
+            new FileReader();
+
+            reader.onload = () =>
+                resolve(reader.result);
+
+            reader.onerror = () =>
+                reject(reader.error);
+
+            reader.readAsDataURL(file);
+
+        }
+    );
+
+}
+
+
+/* =====================================
+   CHECK AND UPLOAD
+   ===================================== */
+
+async function checkScoreboard() {
+
+    if (!running || busy) return;
+
+    if (!fileHandle) return;
+
+    if (!auth.currentUser) {
+
+        stopUpload();
+
+        return;
+
+    }
+
+    busy = true;
+
+    try {
+
+        const file =
+        await fileHandle.getFile();
+
+        const version =
+        file.lastModified + "-" + file.size;
+
+        if (version === lastUploaded) {
+
+            return;
+
+        }
+
+        if (!file.name.toLowerCase()
+            .endsWith(".jpg")) {
+
+            throw new Error(
+                "Only JPG images allowed."
+            );
+
+        }
+
+        if (file.size > 900000) {
+
+            throw new Error(
+                "JPG exceeds 900 KB."
+            );
+
+        }
+
+        const imageData =
+        await readFileAsDataURL(file);
+
+        if (!imageData.startsWith(
+            "data:image/jpeg;base64,"
+        )) {
+
+            throw new Error(
+                "Invalid JPEG data."
+            );
+
+        }
+
+        showStatus(
+            "Uploading new scoreboard..."
+        );
+
+        await set(
+            ref(db, "scoreboard/current"),
+            {
+                image: imageData,
+                updatedAt: serverTimestamp()
+            }
+        );
+
+        lastUploaded = version;
+
+        await updatePreview();
+
+        showStatus(
+            "SUCCESS! Scoreboard uploaded at " +
+            new Date().toLocaleTimeString()
+        );
+
+    }
+    catch (error) {
+
+        showStatus(
+            "Upload error: " + error.message
+        );
+
+    }
+    finally {
+
+        busy = false;
+
+    }
+
+}
+
+
+/* =====================================
+   START UPLOAD
+   ===================================== */
+
+startButton.onclick = async () => {
+
+    if (!auth.currentUser ||
+        !fileHandle ||
+        running) {
+
+        return;
+
+    }
+
+    const approved = confirm(
+        "Start publishing scoreboard.jpg publicly? " +
+        "Make sure the screenshot contains only " +
+        "information you want guests to see."
+    );
+
+    if (!approved) return;
+
+    running = true;
+
+    lastUploaded = "";
+
+    updateButtons();
+
+    showStatus("Live upload started.");
+
+    await checkScoreboard();
+
+    timer = setInterval(
+        checkScoreboard,
+        3000
+    );
+
+};
+
+
+/* =====================================
+   STOP UPLOAD
+   ===================================== */
+
+function stopUpload() {
+
+    running = false;
+
+    if (timer) {
+
+        clearInterval(timer);
+
+        timer = null;
+
+    }
+
+    updateButtons();
+
+}
+
+
+stopButton.onclick = () => {
+
+    stopUpload();
+
+    showStatus("Upload stopped.");
+
+};
+
+
+updateButtons();
+
+</script>
+
+</body>
+
+</html>
