@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 
@@ -6,21 +7,22 @@
 <meta charset="UTF-8">
 
 <meta name="viewport"
-      content="width=device-width, initial-scale=1.0">
+content="width=device-width, initial-scale=1.0">
 
 <title>B&C Bar Live Scoreboard</title>
 
 <style>
 
-/* =================================
-   B&C BAR FULLSCREEN SCOREBOARD
-   ================================= */
+/* =====================================
+   B&C BAR - LIVE SCOREBOARD
+   ===================================== */
 
 * {
     box-sizing: border-box;
 }
 
-html, body {
+html,
+body {
 
     margin: 0;
     padding: 0;
@@ -28,15 +30,19 @@ html, body {
     width: 100%;
     height: 100%;
 
-    background: #000000;
+    background: #000;
 
     overflow: hidden;
 
+    font-family: Arial, sans-serif;
+
 }
+
+/* FULLSCREEN IMAGE */
 
 #scoreboard {
 
-    display: block;
+    display: none;
 
     width: 100vw;
 
@@ -47,7 +53,26 @@ html, body {
 
     object-position: center;
 
-    background: #000000;
+    background: #000;
+
+}
+
+/* STATUS MESSAGE */
+
+#status {
+
+    position: absolute;
+
+    top: 50%;
+    left: 50%;
+
+    transform: translate(-50%, -50%);
+
+    color: #ffcc00;
+
+    text-align: center;
+
+    font-size: 20px;
 
 }
 
@@ -57,47 +82,191 @@ html, body {
 
 <body>
 
+<div id="status">
+Connecting to B&C Bar Live Scoreboard...
+</div>
+
 <img
     id="scoreboard"
-    src="scoreboard.jpg"
     alt="B&C Bar Live Scoreboard"
 >
 
-<script>
+<script type="module">
 
-/* =================================
-   AUTOMATIC IMAGE REFRESH
-   ================================= */
+/* =====================================
+   FIREBASE IMPORTS
+   ===================================== */
 
-const scoreboard = document.getElementById("scoreboard");
+import { initializeApp } from
+"https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 
-function updateScoreboard() {
+import {
+    getDatabase,
+    ref,
+    onValue
+} from
+"https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
-    const newImage = new Image();
 
-    newImage.onload = function() {
+/* =====================================
+   FIREBASE CONFIGURATION
+   ===================================== */
 
-        scoreboard.src = newImage.src;
+const firebaseConfig = {
 
-    };
+    apiKey:
+    "AIzaSyDcy1Zz0uAqhJTy1a0NeqgpQM9wvhoHWVw",
 
-    newImage.onerror = function() {
+    authDomain:
+    "bc-bar-scoreboard.firebaseapp.com",
 
-        console.log("Scoreboard update failed.");
+    databaseURL:
+    "https://bc-bar-scoreboard-default-rtdb.asia-southeast1.firebasedatabase.app",
 
-    };
+    projectId:
+    "bc-bar-scoreboard",
 
-    newImage.src = "scoreboard.jpg?t=" + Date.now();
+    storageBucket:
+    "bc-bar-scoreboard.firebasestorage.app",
 
-}
+    messagingSenderId:
+    "900224710254",
 
-/* Initial update */
+    appId:
+    "1:900224710254:web:732b75ff534ba0e6ed187f"
 
-updateScoreboard();
+};
 
-/* Check every 15 seconds */
 
-setInterval(updateScoreboard, 15000);
+/* =====================================
+   INITIALIZE FIREBASE
+   ===================================== */
+
+const app = initializeApp(firebaseConfig);
+
+const database = getDatabase(app);
+
+
+/* =====================================
+   HTML ELEMENTS
+   ===================================== */
+
+const scoreboard =
+document.getElementById("scoreboard");
+
+const status =
+document.getElementById("status");
+
+
+/* =====================================
+   LIVE DATABASE REFERENCE
+   ===================================== */
+
+const scoreboardRef =
+ref(database, "scoreboard/current");
+
+
+/* =====================================
+   RECEIVE LIVE UPDATES
+   ===================================== */
+
+let latestImageVersion = 0;
+
+onValue(
+
+    scoreboardRef,
+
+    (snapshot) => {
+
+        if (!snapshot.exists()) {
+
+            if (!scoreboard.src) {
+                status.textContent =
+                "Waiting for scoreboard...";
+            }
+
+            return;
+
+        }
+
+        const data = snapshot.val();
+
+        if (!data.image) {
+
+            if (!scoreboard.src) {
+                status.textContent =
+                "Waiting for image...";
+            }
+
+            return;
+
+        }
+
+        // Avoid replacing the image if unchanged.
+
+        if (
+            data.updatedAt &&
+            data.updatedAt === latestImageVersion
+        ) {
+
+            return;
+
+        }
+
+        const newImage = new Image();
+
+        newImage.onload = function() {
+
+            scoreboard.src = newImage.src;
+
+            scoreboard.style.display = "block";
+
+            status.style.display = "none";
+
+            latestImageVersion =
+                data.updatedAt || 0;
+
+            console.log(
+                "Scoreboard updated:",
+                new Date().toLocaleTimeString()
+            );
+
+        };
+
+        newImage.onerror = function() {
+
+            console.error(
+                "Could not display scoreboard image."
+            );
+
+            if (!scoreboard.src) {
+                status.textContent =
+                "Waiting for valid scoreboard image...";
+            }
+
+        };
+
+        newImage.src = data.image;
+
+    },
+
+    (error) => {
+
+        console.error(
+            "Firebase connection error:",
+            error
+        );
+
+        if (!scoreboard.src) {
+
+            status.textContent =
+            "Connection problem. Retrying...";
+
+        }
+
+    }
+
+);
 
 </script>
 
