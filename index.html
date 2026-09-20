@@ -1,70 +1,106 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
+
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<meta name="viewport"
+      content="width=device-width, initial-scale=1.0">
 
 <title>B&C Bar Live Scoreboard</title>
 
 <style>
-body {
-    margin: 0;
-    background: #111;
-    color: white;
-    font-family: Arial, sans-serif;
-    text-align: center;
+
+/* =================================
+   B&C BAR FULLSCREEN SCOREBOARD
+   ================================= */
+
+* {
+    box-sizing: border-box;
 }
 
-h1 {
-    margin: 15px;
+html, body {
+
+    margin: 0;
+    padding: 0;
+
+    width: 100%;
+    height: 100%;
+
+    background: #000000;
+
+    overflow: hidden;
+
 }
 
 #scoreboard {
+
     display: block;
-    width: 100%;
-    height: auto;
+
+    width: 100vw;
+
+    height: 100vh;
+    height: 100dvh;
+
     object-fit: contain;
+
+    object-position: center;
+
+    background: #000000;
+
 }
 
-#status {
-    padding: 10px;
-    color: #aaa;
-}
 </style>
+
 </head>
 
 <body>
 
-<h1>B&C BAR - LIVE SCOREBOARD</h1>
-
-<img id="scoreboard" alt="Live Scoreboard">
-
-<div id="status">Loading scoreboard...</div>
+<img
+    id="scoreboard"
+    src="scoreboard.png"
+    alt="B&C Bar Live Scoreboard"
+>
 
 <script>
-const image = document.getElementById("scoreboard");
-const status = document.getElementById("status");
+
+/* =================================
+   AUTOMATIC IMAGE REFRESH
+   ================================= */
+
+const scoreboard = document.getElementById("scoreboard");
 
 function updateScoreboard() {
 
     const newImage = new Image();
 
     newImage.onload = function() {
-        image.src = newImage.src;
-        status.textContent = "Scoreboard connected";
+
+        scoreboard.src = newImage.src;
+
     };
 
     newImage.onerror = function() {
-        status.textContent = "Waiting for scoreboard...";
+
+        console.log("Scoreboard update failed.");
+
     };
 
     newImage.src = "scoreboard.png?t=" + Date.now();
+
 }
+
+/* Initial update */
 
 updateScoreboard();
 
-setInterval(updateScoreboard, 30000);
+/* Check every 15 seconds */
+
+setInterval(updateScoreboard, 15000);
+
 </script>
 
 </body>
+
 </html>
